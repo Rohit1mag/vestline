@@ -1,4 +1,5 @@
-import { Show, SignInButton, SignUpButton, UserButton, useAuth, useUser } from '@clerk/react'
+import { Show, UserButton, useAuth, useUser } from '@clerk/react'
+import { LandingPage } from './components/LandingPage'
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useSyncedAppData } from './hooks/useSyncedAppData'
 import { loadAppData, saveAppData } from './storage'
@@ -103,34 +104,7 @@ function CloudApp() {
   return (
     <>
       <Show when="signed-out">
-        <div className="flex min-h-svh flex-col items-center justify-center gap-8 bg-[#0c0f14] px-4 py-12">
-          <div className="text-center">
-            <p className="font-[family-name:var(--font-display)] text-2xl font-semibold text-[#e8eaf0]">
-              Vestline
-            </p>
-            <p className="mt-2 max-w-md text-sm text-[#8b92a8]">
-              Sign in to sync your cap table and vesting to the cloud. Your data stays tied to your account.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <SignInButton mode="modal">
-              <button
-                type="button"
-                className="rounded-lg bg-[#3ee8b5] px-5 py-2.5 text-sm font-semibold text-[#0c0f14] hover:brightness-110"
-              >
-                Sign in
-              </button>
-            </SignInButton>
-            <SignUpButton mode="modal">
-              <button
-                type="button"
-                className="rounded-lg border border-[#2a3142] bg-[#1a1f2e] px-5 py-2.5 text-sm font-medium text-[#e8eaf0] hover:border-[#3ee8b5]/40"
-              >
-                Create account
-              </button>
-            </SignUpButton>
-          </div>
-        </div>
+        <LandingPage />
       </Show>
       <Show when="signed-in">
         <SignedInWorkspace />

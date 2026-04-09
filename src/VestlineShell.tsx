@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { CapTableChart } from './components/CapTableChart'
 import { CapTableChat } from './components/CapTableChat'
+import { VestlineLogo } from './components/VestlineLogo'
 import { VestingChart } from './components/VestingChart'
 import {
   formatOwnershipPercent,
@@ -139,9 +140,7 @@ export function VestlineShell({
       <header className="sticky top-0 z-20 border-b border-[#2a3142] bg-[#0c0f14]/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#3ee8b5]/15 text-lg font-bold text-[#3ee8b5] font-[family-name:var(--font-display)]">
-              V
-            </div>
+            <VestlineLogo size={40} />
             <div className="text-left">
               <h1 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight sm:text-xl">
                 Vestline
