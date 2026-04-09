@@ -27,6 +27,9 @@ export interface VestlineShellProps {
   setData: React.Dispatch<React.SetStateAction<AppData>>
   syncBadge?: ReactNode
   authSlot?: ReactNode
+  workspaceSlot?: ReactNode
+  /** If provided, a "Share link" button appears per stakeholder. Returns the share URL. */
+  onGetShareLink?: (stakeholderId: string) => Promise<string | null>
   remoteError?: string | null
 }
 
@@ -45,6 +48,8 @@ export function VestlineShell({
   setData,
   syncBadge,
   authSlot,
+  workspaceSlot,
+  onGetShareLink,
   remoteError,
 }: VestlineShellProps) {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -170,6 +175,7 @@ export function VestlineShell({
                 </button>
               ))}
             </nav>
+            {workspaceSlot}
             {syncBadge}
             {authSlot}
           </div>
@@ -205,6 +211,7 @@ export function VestlineShell({
             onRemoveStakeholder={removeStakeholder}
             upsertGrant={upsertGrant}
             updateCompany={updateCompany}
+            onGetShareLink={onGetShareLink}
             today={today}
           />
         )}
@@ -400,6 +407,7 @@ function GrantsView({
   onRemoveStakeholder,
   upsertGrant,
   updateCompany,
+  onGetShareLink,
   today,
 }: {
   data: AppData
@@ -411,11 +419,31 @@ function GrantsView({
   onRemoveStakeholder: (id: string) => void
   upsertGrant: (g: EquityGrant | Omit<EquityGrant, 'id'>) => void
   updateCompany: (patch: Partial<AppData['company']>) => void
+  onGetShareLink?: (stakeholderId: string) => Promise<string | null>
   today: Date
 }) {
   const [editingGrant, setEditingGrant] = useState<EquityGrant | null>(null)
   const [companyName, setCompanyName] = useState(data.company.name)
   const [authShares, setAuthShares] = useState(data.company.totalAuthorizedShares?.toString() ?? '')
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [shareName, setShareName] = useState('')
+  const [shareLoading, setShareLoading] = useState<string | null>(null) // stakeholderId being generated
+  const [shareCopied, setShareCopied] = useState(false)
+
+  const handleShareLink = async (stakeholderId: string, stakeholderName: string) => {
+    if (!onGetShareLink) return
+    setShareLoading(stakeholderId)
+    const url = await onGetShareLink(stakeholderId)
+    setShareLoading(null)
+    if (url) { setShareUrl(url); setShareName(stakeholderName); setShareCopied(false) }
+  }
+
+  const copyShareUrl = async () => {
+    if (!shareUrl) return
+    await navigator.clipboard.writeText(shareUrl)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }
 
   const persistAuthorized = () => {
     const raw = authShares.trim()
@@ -476,13 +504,26 @@ function GrantsView({
                   <p className="font-medium">{s.name}</p>
                   <p className="text-xs text-[#8b92a8]">{s.role}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRemoveStakeholder(s.id)}
-                  className="shrink-0 text-xs text-[#ff6b5b]/80 hover:text-[#ff6b5b]"
-                >
-                  Remove
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {onGetShareLink && (
+                    <button
+                      type="button"
+                      onClick={() => handleShareLink(s.id, s.name)}
+                      disabled={shareLoading === s.id}
+                      className="text-xs text-[#3ee8b5]/70 hover:text-[#3ee8b5] disabled:opacity-50"
+                      title="Get read-only link for this person"
+                    >
+                      {shareLoading === s.id ? '…' : 'Share'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onRemoveStakeholder(s.id)}
+                    className="text-xs text-[#ff6b5b]/80 hover:text-[#ff6b5b]"
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -569,6 +610,46 @@ function GrantsView({
           }}
           onClose={() => setEditingGrant(null)}
         />
+      )}
+
+      {/* Share link modal */}
+      {shareUrl && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-2xl border border-[#2a3142] bg-[#1a1f2e] p-6 shadow-xl">
+            <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">
+              Share link for {shareName}
+            </h3>
+            <p className="mt-1 text-sm text-[#8b92a8]">
+              Anyone with this link can view {shareName}'s grant details (read-only, no sign-in required).
+            </p>
+            <div className="mt-4 flex gap-2">
+              <input
+                readOnly
+                value={shareUrl}
+                className="min-w-0 flex-1 rounded-xl border border-[#2a3142] bg-[#0c0f14] px-3 py-2 text-sm text-[#e8eaf0] outline-none"
+              />
+              <button
+                type="button"
+                onClick={copyShareUrl}
+                className="shrink-0 rounded-xl bg-[#3ee8b5] px-4 py-2 text-sm font-semibold text-[#0c0f14] hover:brightness-110"
+              >
+                {shareCopied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-[#8b92a8]">
+              The link is stable — sharing it again for the same person reuses this URL.
+            </p>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShareUrl(null)}
+                className="rounded-lg border border-[#2a3142] px-4 py-2 text-sm font-medium hover:bg-[#0c0f14]"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -64,9 +64,21 @@ const FEATURES = [
   },
 ]
 
-export function LandingPage() {
+export function LandingPage({ inviteHint }: { inviteHint?: boolean } = {}) {
   return (
     <div className="min-h-svh bg-[#0c0f14] text-[#e8eaf0]">
+      {/* Invite hint banner */}
+      {inviteHint && (
+        <div className="border-b border-[#3ee8b5]/30 bg-[#3ee8b5]/[0.06] px-6 py-3 text-center text-sm text-[#3ee8b5]">
+          You've been invited to a shared workspace.{' '}
+          <SignInButton mode="modal">
+            <button type="button" className="font-semibold underline underline-offset-2 hover:no-underline">
+              Sign in to accept →
+            </button>
+          </SignInButton>
+        </div>
+      )}
+
       {/* Nav */}
       <header className="sticky top-0 z-20 border-b border-[#2a3142]/60 bg-[#0c0f14]/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">

@@ -22,3 +22,11 @@ export function createClerkSupabaseClient(
     },
   })
 }
+
+/** Unauthenticated client — only for calling public RPCs (e.g. get_grant_by_share_token). */
+export function createAnonSupabaseClient(): SupabaseClient | null {
+  const u = url?.trim()
+  const k = anonKey?.trim()
+  if (!u || !k) return null
+  return createClient(u, k)
+}

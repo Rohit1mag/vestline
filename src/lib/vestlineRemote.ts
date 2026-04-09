@@ -64,3 +64,40 @@ export async function upsertVestlinePayload(
   }
   return { error: null }
 }
+
+/** Create (or reuse) a stable share link for one stakeholder. Returns the UUID token. */
+export async function createGrantShareLink(
+  client: SupabaseClient,
+  stakeholderId: string
+): Promise<{ token: string | null; error: Error | null }> {
+  const { data, error } = await client.rpc('create_grant_share_link', {
+    p_stakeholder_id: stakeholderId,
+  })
+  if (error) {
+    console.error('[vestline] create_grant_share_link', error)
+    return { token: null, error: new Error(error.message) }
+  }
+  return { token: data as string, error: null }
+}
+
+export interface GrantSharePayload {
+  company: { name: string; totalAuthorizedShares?: number }
+  stakeholder: { id: string; name: string; role: string; email?: string }
+  grants: AppData['grants']
+}
+
+/** Fetch grant data by share token — callable with the anon client (no auth). */
+export async function getGrantByShareToken(
+  client: SupabaseClient,
+  token: string
+): Promise<{ data: GrantSharePayload | null; error: Error | null }> {
+  const { data, error } = await client.rpc('get_grant_by_share_token', {
+    p_token: token,
+  })
+  if (error) {
+    console.error('[vestline] get_grant_by_share_token', error)
+    return { data: null, error: new Error(error.message) }
+  }
+  if (!data) return { data: null, error: null }
+  return { data: data as GrantSharePayload, error: null }
+}
