@@ -22,15 +22,22 @@ export async function listMyWorkspaces(
   }
 
   const rows = (data ?? []) as unknown as { role: string; workspaces: { id: string; name: string } | null }[]
-  const infos: WorkspaceInfo[] = rows
-    .filter((r) => r.workspaces != null)
-    .map((r) => ({
-      id: r.workspaces!.id,
-      name: r.workspaces!.name,
-      role: r.role as 'owner' | 'editor',
-    }))
 
-  return { data: infos, error: null }
+  // Deduplicate by workspace id — keep highest role (owner > editor)
+  const seen = new Map<string, WorkspaceInfo>()
+  for (const r of rows) {
+    if (!r.workspaces) continue
+    const existing = seen.get(r.workspaces.id)
+    if (!existing || r.role === 'owner') {
+      seen.set(r.workspaces.id, {
+        id: r.workspaces.id,
+        name: r.workspaces.name,
+        role: r.role as 'owner' | 'editor',
+      })
+    }
+  }
+
+  return { data: Array.from(seen.values()), error: null }
 }
 
 export async function fetchWorkspacePayload(
