@@ -1,73 +1,74 @@
-# React + TypeScript + Vite
+# Vestline
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Web app for **modeling equity grants, vesting, and a simple cap-table view** for early-stage teams. Each signed-in user gets their **own workspace** (Supabase row + per-user browser cache).
 
-Currently, two official plugins are available:
+**Stack:** React 19, TypeScript, Vite 8, Tailwind CSS v4, Recharts, date-fns  
+**Optional cloud:** [Clerk](https://clerk.com) (auth) + [Supabase](https://supabase.com) (Postgres + Row Level Security)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Company settings and optional **authorized share count** (used for ownership % and entering grants as **% of authorized**, e.g. 0.1%–1% for hires)
+- **Stakeholders** and **grants** (common, ISO, NSO, RSU labels for categorization)
+- **Vesting schedules** (cliff + monthly table, chart)
+- **Overview** dashboard: granted / vested / unvested, ownership chart, milestone dates
+- **Local-only mode** if `VITE_CLERK_PUBLISHABLE_KEY` is unset (data stays in this browser’s `localStorage`)
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Quick start
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+cp .env.example .env
+# Edit .env — see below
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+| Script    | Description        |
+| --------- | ------------------ |
+| `npm run dev` | Dev server (Vite) |
+| `npm run build` | Production build |
+| `npm run preview` | Preview production build |
+| `npm run lint` | ESLint |
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Environment variables
+
+Copy `.env.example` to `.env` (or `.env.local`). **Never commit `.env`** — it is gitignored.
+
+| Variable | Required | Purpose |
+| -------- | -------- | ------- |
+| `VITE_CLERK_PUBLISHABLE_KEY` | No* | Clerk sign-in; omit for local-only mode |
+| `VITE_SUPABASE_URL` | For sync | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | For sync | Supabase **anon** (JWT) key — not the service role |
+
+\*With Clerk + Supabase configured, data syncs to `public.vestline_app_data` (one JSON payload per user). See `supabase/schema.sql`.
+
+### Clerk + Supabase
+
+1. In **Supabase**: Authentication → **Third-party auth** → add **Clerk** (match your Clerk domain).
+2. In **Clerk**: complete the **Supabase** integration for your project.
+3. Use the **anon** key from Supabase Project Settings → API in `VITE_SUPABASE_ANON_KEY`.
+
+If requests fail with **PGRST301** (“No suitable key to decode the JWT”), the JWT path between Clerk and Supabase is misconfigured or the wrong key type is in use — see comments in `.env.example`.
+
+---
+
+## Database
+
+Run `supabase/schema.sql` in the Supabase SQL editor for the **same** project as `VITE_SUPABASE_URL`. It creates `vestline_app_data` with RLS so each user can only read/write rows where `user_id` matches their JWT `sub` (Clerk user id).
+
+---
+
+## Repository
+
+[github.com/Rohit1mag/vestline](https://github.com/Rohit1mag/vestline)
+
+---
+
+## Disclaimer
+
+Vestline is a **planning / modeling** tool. It does not provide legal, tax, or investment advice. Real grants and cap tables should be reviewed with qualified counsel.

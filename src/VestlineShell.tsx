@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { CapTableChart } from './components/CapTableChart'
+import { CapTableChat } from './components/CapTableChat'
 import { VestingChart } from './components/VestingChart'
 import {
   formatOwnershipPercent,
@@ -223,6 +224,8 @@ export function VestlineShell({
       {showPersonForm && (
         <PersonFormModal onSave={addStakeholder} onClose={() => setShowPersonForm(false)} />
       )}
+
+      <CapTableChat data={data} today={today} />
     </div>
   )
 }
