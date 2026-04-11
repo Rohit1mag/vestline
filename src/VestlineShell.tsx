@@ -521,7 +521,7 @@ function StatCard({
   )
 }
 
-const AVATAR_COLORS = [
+const AVATAR_COLORS: [string, string][] = [
   ['#3ee8b5', '#0c2e24'],
   ['#6b8cff', '#0d1433'],
   ['#e8c547', '#2e2500'],
