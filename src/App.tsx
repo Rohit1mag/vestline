@@ -69,6 +69,7 @@ function PersonalWorkspace({
       key={user.id}
       onShareLink={onShareLink}
       workspaceSlot={workspaceSlot}
+      userName={user.firstName}
     />
   )
 }
@@ -76,9 +77,11 @@ function PersonalWorkspace({
 function PersonalWorkspaceForUser({
   onShareLink,
   workspaceSlot,
+  userName,
 }: {
   onShareLink: (stakeholderId: string) => Promise<string | null>
   workspaceSlot: React.ReactNode
+  userName?: string | null
 }) {
   const { data, setData, ready, saveState, saveError } = useSyncedAppData()
   const setDataStrict: Dispatch<SetStateAction<AppData>> = useCallback(
@@ -115,6 +118,7 @@ function PersonalWorkspaceForUser({
       workspaceSlot={workspaceSlot}
       onGetShareLink={onShareLink}
       remoteError={saveError}
+      userName={userName}
     />
   )
 }

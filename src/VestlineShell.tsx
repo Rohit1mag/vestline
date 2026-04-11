@@ -16,6 +16,7 @@ import {
   percentOfAuthorizedToShares,
   sharesToPercentOfAuthorized,
 } from './equityMath'
+import { exportCapTablePDF, exportGrantsCSV } from './lib/export'
 import { newGrant, newStakeholder } from './storage'
 import type { AppData, EquityGrant, GrantType, Stakeholder } from './types'
 import { buildVestingSchedule, grantTypeLabel, vestedSharesAt } from './vesting'
@@ -31,6 +32,8 @@ export interface VestlineShellProps {
   /** If provided, a "Share link" button appears per stakeholder. Returns the share URL. */
   onGetShareLink?: (stakeholderId: string) => Promise<string | null>
   remoteError?: string | null
+  /** First name of the signed-in user, for the welcome greeting. */
+  userName?: string | null
 }
 
 function formatShares(n: number): string {
@@ -51,6 +54,7 @@ export function VestlineShell({
   workspaceSlot,
   onGetShareLink,
   remoteError,
+  userName,
 }: VestlineShellProps) {
   const [tab, setTab] = useState<Tab>('dashboard')
   const [selectedGrantId, setSelectedGrantId] = useState<string | null>(null)
@@ -196,6 +200,9 @@ export function VestlineShell({
             capSlices={capSlices}
             today={today}
             onEditCompany={() => setTab('grants')}
+            onExportCSV={() => exportGrantsCSV(data, today)}
+            onExportPDF={() => exportCapTablePDF(data, today, capSlices, totals)}
+            userName={userName}
           />
         )}
 
@@ -242,83 +249,177 @@ function DashboardView({
   capSlices,
   today,
   onEditCompany,
+  onExportCSV,
+  onExportPDF,
+  userName,
 }: {
   data: AppData
   totals: { granted: number; vested: number; unvested: number; base: number }
   capSlices: { name: string; value: number; color?: string }[]
   today: Date
   onEditCompany: () => void
+  onExportCSV: () => void
+  onExportPDF: () => void
+  userName?: string | null
 }) {
   const vestPct = totals.granted > 0 ? (totals.vested / totals.granted) * 100 : 0
+  const hasGrants = data.grants.length > 0
 
   return (
     <div className="space-y-8 text-left">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      {/* Welcome + actions row */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
+          {userName && (
+            <p className="mb-1 text-sm font-medium text-[#3ee8b5]">
+              Welcome back, {userName}
+            </p>
+          )}
           <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight sm:text-3xl">
             {data.company.name}
           </h2>
           <p className="mt-1 text-sm text-[#8b92a8]">As of {format(today, 'MMMM d, yyyy')}</p>
         </div>
-        <button
-          type="button"
-          onClick={onEditCompany}
-          className="self-start rounded-lg border border-[#2a3142] bg-[#1a1f2e] px-4 py-2 text-sm font-medium text-[#e8eaf0] hover:border-[#3ee8b5]/40"
-        >
-          Edit company & grants
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={onExportCSV}
+            title="Download all grants as a CSV spreadsheet"
+            className="flex items-center gap-1.5 rounded-lg border border-[#2a3142] bg-[#1a1f2e] px-3 py-2 text-sm font-medium text-[#e8eaf0] transition hover:border-[#3ee8b5]/40 hover:text-[#3ee8b5]"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={onExportPDF}
+            title="Export cap table as a printable PDF"
+            className="flex items-center gap-1.5 rounded-lg border border-[#2a3142] bg-[#1a1f2e] px-3 py-2 text-sm font-medium text-[#e8eaf0] transition hover:border-[#3ee8b5]/40 hover:text-[#3ee8b5]"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 6 2 18 2 18 9"/>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            Export PDF
+          </button>
+          <button
+            type="button"
+            onClick={onEditCompany}
+            className="rounded-lg border border-[#2a3142] bg-[#1a1f2e] px-4 py-2 text-sm font-medium text-[#e8eaf0] transition hover:border-[#3ee8b5]/40"
+          >
+            Edit company & grants
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total granted" value={formatShares(totals.granted)} hint="All grants" />
-        <StatCard
-          label="Vested"
-          value={formatShares(totals.vested)}
-          hint={`${vestPct.toFixed(1)}% of granted`}
-          accent
-        />
-        <StatCard label="Unvested" value={formatShares(totals.unvested)} hint="On schedule" />
-        <StatCard
-          label="Authorized pool"
-          value={
-            data.company.totalAuthorizedShares ? formatShares(data.company.totalAuthorizedShares) : '—'
-          }
-          hint={data.company.totalAuthorizedShares ? 'Fully diluted base' : 'Optional — set in Team & grants'}
-        />
+      {/* Stat cards with ambient glow */}
+      <div className="relative">
+        <div className="pointer-events-none absolute -top-6 left-1/2 h-40 w-3/4 -translate-x-1/2 rounded-full bg-[#3ee8b5]/[0.05] blur-3xl" />
+        <div className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Total granted" value={formatShares(totals.granted)} hint="All grants" />
+          <StatCard
+            label="Vested"
+            value={formatShares(totals.vested)}
+            hint={`${vestPct.toFixed(1)}% of granted`}
+            accent
+          />
+          <StatCard label="Unvested" value={formatShares(totals.unvested)} hint="On schedule" />
+          <StatCard
+            label="Authorized pool"
+            value={
+              data.company.totalAuthorizedShares ? formatShares(data.company.totalAuthorizedShares) : '—'
+            }
+            hint={data.company.totalAuthorizedShares ? 'Fully diluted base' : 'Optional — set in Team & grants'}
+          />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
+        {/* Ownership card */}
         <section className={`${card} min-w-0 p-6 lg:col-span-2`}>
-          <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">Ownership</h3>
-          <p className="mt-1 text-sm text-[#8b92a8]">
-            {data.company.totalAuthorizedShares ? 'Share of authorized cap' : 'Share of total granted'}
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#3ee8b5]/10 text-[#3ee8b5]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M12 7v5l3.5 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-[family-name:var(--font-display)] text-base font-semibold leading-none">Ownership</h3>
+              <p className="mt-1 text-xs text-[#8b92a8]">
+                {data.company.totalAuthorizedShares ? 'Share of authorized cap' : 'Share of total granted'}
+              </p>
+            </div>
+          </div>
           {capSlices.length > 0 ? (
-            <CapTableChart slices={capSlices} />
+            <>
+              <CapTableChart slices={capSlices} />
+              <ul className="mt-3 space-y-2 text-sm">
+                {capSlices.map((s) => (
+                  <li key={s.name} className="flex justify-between border-b border-[#2a3142]/50 pb-1.5 last:border-0 last:pb-0">
+                    <span className="text-[#e8eaf0]">{s.name}</span>
+                    <span className="tabular-nums text-[#8b92a8]">{s.value}%</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : (
-            <p className="mt-10 text-center text-sm text-[#8b92a8]">Add grants to see the split</p>
+            <div className="mt-8 flex flex-col items-center gap-3 py-6 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-dashed border-[#2a3142] bg-[#1a1f2e]/80">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[#3a4154]">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M12 7v5l3.5 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </div>
+              <p className="text-sm text-[#8b92a8]">Add grants to see ownership</p>
+              <button
+                type="button"
+                onClick={onEditCompany}
+                className="mt-1 rounded-lg bg-[#3ee8b5]/10 px-4 py-1.5 text-xs font-semibold text-[#3ee8b5] transition hover:bg-[#3ee8b5]/20"
+              >
+                Add your first grant →
+              </button>
+            </div>
           )}
-          <ul className="mt-3 space-y-2 text-sm">
-            {capSlices.map((s) => (
-              <li key={s.name} className="flex justify-between text-[#8b92a8]">
-                <span className="text-[#e8eaf0]">{s.name}</span>
-                <span>{s.value}%</span>
-              </li>
-            ))}
-          </ul>
         </section>
 
+        {/* Milestones card */}
         <section className={`${card} p-6 lg:col-span-3`}>
-          <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">Milestones</h3>
-          <p className="mt-1 text-sm text-[#8b92a8]">Cliffs and final vest dates</p>
-          <MilestoneList grants={data.grants} stakeholders={data.stakeholders} />
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#6b8cff]/10 text-[#6b8cff]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-[family-name:var(--font-display)] text-base font-semibold leading-none">Milestones</h3>
+              <p className="mt-1 text-xs text-[#8b92a8]">Upcoming cliffs and final vest dates</p>
+            </div>
+          </div>
+          <MilestoneList grants={data.grants} stakeholders={data.stakeholders} hasGrants={hasGrants} onEditCompany={onEditCompany} />
         </section>
       </div>
     </div>
   )
 }
 
-function MilestoneList({ grants, stakeholders }: { grants: EquityGrant[]; stakeholders: Stakeholder[] }) {
+function MilestoneList({
+  grants,
+  stakeholders,
+  hasGrants,
+  onEditCompany,
+}: {
+  grants: EquityGrant[]
+  stakeholders: Stakeholder[]
+  hasGrants: boolean
+  onEditCompany: () => void
+}) {
   const byId = useMemo(() => new Map(stakeholders.map((s) => [s.id, s])), [stakeholders])
   const rows = useMemo(() => {
     const out: { date: Date; label: string; sub: string }[] = []
@@ -350,7 +451,28 @@ function MilestoneList({ grants, stakeholders }: { grants: EquityGrant[]; stakeh
   }, [grants, byId])
 
   if (rows.length === 0) {
-    return <p className="mt-6 text-sm text-[#8b92a8]">No grants yet.</p>
+    return (
+      <div className="mt-8 flex flex-col items-center gap-3 py-6 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-dashed border-[#2a3142] bg-[#1a1f2e]/80">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[#3a4154]">
+            <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </div>
+        <p className="text-sm text-[#8b92a8]">
+          {hasGrants ? 'No upcoming milestones.' : 'No grants yet — milestones will appear here.'}
+        </p>
+        {!hasGrants && (
+          <button
+            type="button"
+            onClick={onEditCompany}
+            className="mt-1 rounded-lg bg-[#3ee8b5]/10 px-4 py-1.5 text-xs font-semibold text-[#3ee8b5] transition hover:bg-[#3ee8b5]/20"
+          >
+            Add your first grant →
+          </button>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -384,16 +506,54 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-2xl border p-5 ${
+      className={`rounded-2xl border p-5 transition ${
         accent
-          ? 'border-[#3ee8b5]/25 bg-[#3ee8b5]/[0.06]'
-          : 'border-[#2a3142] bg-[#1a1f2e]'
+          ? 'border-[#3ee8b5]/25 bg-[#3ee8b5]/[0.06] hover:border-[#3ee8b5]/40 hover:bg-[#3ee8b5]/[0.09]'
+          : 'border-[#2a3142] bg-[#1a1f2e] hover:border-[#3ee8b5]/20 hover:bg-[#1e2436]'
       }`}
     >
       <p className="text-xs font-medium uppercase tracking-wider text-[#8b92a8]">{label}</p>
-      <p className="mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums">{value}</p>
+      <p className={`mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums ${accent ? 'text-[#3ee8b5]' : ''}`}>
+        {value}
+      </p>
       <p className="mt-1 text-xs text-[#8b92a8]">{hint}</p>
     </div>
+  )
+}
+
+const AVATAR_COLORS = [
+  ['#3ee8b5', '#0c2e24'],
+  ['#6b8cff', '#0d1433'],
+  ['#e8c547', '#2e2500'],
+  ['#c084fc', '#1e0a2e'],
+  ['#ff6b5b', '#2e0f0a'],
+  ['#5eead4', '#0a2422'],
+]
+
+function nameInitials(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
+function avatarColors(name: string): [string, string] {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+const GRANT_TYPE_STYLES: Record<GrantType, string> = {
+  iso: 'border-[#6b8cff]/40 bg-[#6b8cff]/10 text-[#6b8cff]',
+  nso: 'border-[#c084fc]/40 bg-[#c084fc]/10 text-[#c084fc]',
+  rsu: 'border-[#e8c547]/40 bg-[#e8c547]/10 text-[#e8c547]',
+  common: 'border-[#8b92a8]/30 bg-[#8b92a8]/10 text-[#8b92a8]',
+}
+
+function GrantTypeBadge({ type }: { type: GrantType }) {
+  return (
+    <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${GRANT_TYPE_STYLES[type]}`}>
+      {grantTypeLabel(type)}
+    </span>
   )
 }
 
@@ -456,8 +616,17 @@ function GrantsView({
   return (
     <div className="grid gap-8 text-left lg:grid-cols-12">
       <aside className="space-y-6 lg:col-span-4">
+
+        {/* Company section */}
         <section className={`${card} p-5`}>
-          <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">Company</h3>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e8c547]/10 text-[#e8c547]">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M8 10v4M12 10v4M16 10v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h3 className="font-[family-name:var(--font-display)] text-base font-semibold leading-none">Company</h3>
+          </div>
           <label className="mt-4 block text-xs font-medium uppercase tracking-wider text-[#8b92a8]">
             Name
           </label>
@@ -478,102 +647,170 @@ function GrantsView({
             onBlur={persistAuthorized}
           />
           <p className="mt-2 text-xs text-[#8b92a8]">
-            Cap table % and grant sizing: set this to your fully diluted share count (or best estimate) to
-            enter hires as a percent (e.g. 0.25%–1%) and see ownership.
+            Set this to your fully diluted share count to enter grants as a percent (e.g. 0.25%–1%) and see ownership.
           </p>
         </section>
 
+        {/* Team section */}
         <section className={`${card} p-5`}>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">Team</h3>
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#3ee8b5]/10 text-[#3ee8b5]">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </div>
+              <h3 className="font-[family-name:var(--font-display)] text-base font-semibold leading-none">Team</h3>
+            </div>
             <button
               type="button"
               onClick={onShowPersonForm}
-              className="rounded-lg bg-[#3ee8b5]/15 px-3 py-1.5 text-xs font-semibold text-[#3ee8b5] hover:bg-[#3ee8b5]/25"
+              className="rounded-lg bg-[#3ee8b5]/15 px-3 py-1.5 text-xs font-semibold text-[#3ee8b5] transition hover:bg-[#3ee8b5]/25"
             >
               Add person
             </button>
           </div>
-          <ul className="mt-4 space-y-3">
-            {data.stakeholders.map((s) => (
-              <li
-                key={s.id}
-                className="flex items-start justify-between gap-2 rounded-lg border border-[#2a3142]/80 bg-[#0c0f14]/50 px-3 py-2"
+          {data.stakeholders.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-[#2a3142] py-6 text-center">
+              <p className="text-sm text-[#8b92a8]">No team members yet</p>
+              <button
+                type="button"
+                onClick={onShowPersonForm}
+                className="mt-2 text-xs font-semibold text-[#3ee8b5] hover:underline"
               >
-                <div className="min-w-0">
-                  <p className="font-medium">{s.name}</p>
-                  <p className="text-xs text-[#8b92a8]">{s.role}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {onGetShareLink && (
-                    <button
-                      type="button"
-                      onClick={() => handleShareLink(s.id, s.name)}
-                      disabled={shareLoading === s.id}
-                      className="text-xs text-[#3ee8b5]/70 hover:text-[#3ee8b5] disabled:opacity-50"
-                      title="Get read-only link for this person"
-                    >
-                      {shareLoading === s.id ? '…' : 'Share'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onRemoveStakeholder(s.id)}
-                    className="text-xs text-[#ff6b5b]/80 hover:text-[#ff6b5b]"
+                Add your first person →
+              </button>
+            </div>
+          ) : (
+            <ul className="mt-4 space-y-2">
+              {data.stakeholders.map((s) => {
+                const [bg, fg] = avatarColors(s.name)
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-[#2a3142]/80 bg-[#0c0f14]/50 px-3 py-2.5 transition hover:border-[#2a3142]"
                   >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+                        style={{ background: bg, color: fg }}
+                      >
+                        {nameInitials(s.name)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium leading-tight">{s.name}</p>
+                        <p className="text-xs text-[#8b92a8]">{s.role}</p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {onGetShareLink && (
+                        <button
+                          type="button"
+                          onClick={() => handleShareLink(s.id, s.name)}
+                          disabled={shareLoading === s.id}
+                          className="text-xs text-[#3ee8b5]/70 transition hover:text-[#3ee8b5] disabled:opacity-50"
+                          title="Get read-only link for this person"
+                        >
+                          {shareLoading === s.id ? '…' : 'Share'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onRemoveStakeholder(s.id)}
+                        className="text-xs text-[#ff6b5b]/60 transition hover:text-[#ff6b5b]"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </section>
 
+        {/* Grants section */}
         <section className={`${card} p-5`}>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">Grants</h3>
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#6b8cff]/10 text-[#6b8cff]">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <line x1="9" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <line x1="9" y1="17" x2="13" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </div>
+              <h3 className="font-[family-name:var(--font-display)] text-base font-semibold leading-none">Grants</h3>
+            </div>
             <button
               type="button"
               onClick={onShowGrantForm}
-              className="rounded-lg bg-[#3ee8b5] px-3 py-1.5 text-xs font-semibold text-[#0c0f14] hover:brightness-110"
+              className="rounded-lg bg-[#3ee8b5] px-3 py-1.5 text-xs font-semibold text-[#0c0f14] transition hover:brightness-110"
             >
               New grant
             </button>
           </div>
-          <ul className="mt-4 space-y-2">
-            {data.grants.map((g) => {
-              const person = data.stakeholders.find((s) => s.id === g.stakeholderId)
-              const vested = vestedSharesAt(g, today)
-              const active = selectedGrant?.id === g.id
-              const auth = data.company.totalAuthorizedShares
-              const pctAuth =
-                auth && auth > 0 ? formatOwnershipPercent(g.shares, auth) : null
-              return (
-                <li key={g.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelectGrant(active ? null : g.id)}
-                    className={`w-full rounded-xl border px-4 py-3 text-left transition ${
-                      active
-                        ? 'border-[#3ee8b5]/40 bg-[#3ee8b5]/10'
-                        : 'border-[#2a3142] bg-[#0c0f14]/50 hover:bg-[#0c0f14]'
-                    }`}
-                  >
-                    <p className="font-medium">{g.label}</p>
-                    <p className="text-xs text-[#8b92a8]">
-                      {person?.name ?? 'Unknown'} · {grantTypeLabel(g.grantType)} · {formatShares(g.shares)}{' '}
-                      shares
-                      {pctAuth !== null ? ` (~${pctAuth}% of authorized)` : ''}
-                    </p>
-                    <p className="mt-1 text-xs text-[#3ee8b5]">
-                      {formatShares(vested)} vested (
-                      {g.shares ? ((vested / g.shares) * 100).toFixed(1) : 0}%)
-                    </p>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+          {data.grants.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-[#2a3142] py-6 text-center">
+              <p className="text-sm text-[#8b92a8]">No grants yet</p>
+              <button
+                type="button"
+                onClick={onShowGrantForm}
+                className="mt-2 text-xs font-semibold text-[#3ee8b5] hover:underline"
+              >
+                Create your first grant →
+              </button>
+            </div>
+          ) : (
+            <ul className="mt-4 space-y-2">
+              {data.grants.map((g) => {
+                const person = data.stakeholders.find((s) => s.id === g.stakeholderId)
+                const vested = vestedSharesAt(g, today)
+                const vestPct = g.shares > 0 ? (vested / g.shares) * 100 : 0
+                const active = selectedGrant?.id === g.id
+                const auth = data.company.totalAuthorizedShares
+                const pctAuth = auth && auth > 0 ? formatOwnershipPercent(g.shares, auth) : null
+                return (
+                  <li key={g.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectGrant(active ? null : g.id)}
+                      className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                        active
+                          ? 'border-[#3ee8b5]/40 bg-[#3ee8b5]/10'
+                          : 'border-[#2a3142] bg-[#0c0f14]/50 hover:border-[#2a3142] hover:bg-[#0c0f14]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate font-medium">{g.label}</p>
+                        <GrantTypeBadge type={g.grantType} />
+                      </div>
+                      <p className="mt-1 text-xs text-[#8b92a8]">
+                        {person?.name ?? 'Unknown'} · {formatShares(g.shares)} shares
+                        {pctAuth !== null ? ` · ~${pctAuth}%` : ''}
+                      </p>
+                      {/* Vesting progress bar */}
+                      <div className="mt-2.5">
+                        <div className="flex items-center justify-between text-[10px] text-[#8b92a8]">
+                          <span className="text-[#3ee8b5]">{formatShares(vested)} vested</span>
+                          <span>{vestPct.toFixed(1)}%</span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#2a3142]">
+                          <div
+                            className="h-full rounded-full bg-[#3ee8b5] transition-all"
+                            style={{ width: `${Math.min(vestPct, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </section>
       </aside>
 
@@ -588,13 +825,30 @@ function GrantsView({
             onDelete={() => onDeleteGrant(selectedGrant.id)}
           />
         ) : (
-          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#2a3142] bg-[#1a1f2e]/50 p-8 text-center">
-            <p className="font-[family-name:var(--font-display)] text-lg font-medium text-[#8b92a8]">
-              Select a grant
-            </p>
-            <p className="mt-2 max-w-sm text-sm text-[#8b92a8]">
-              Or create one with &ldquo;New grant&rdquo;.
-            </p>
+          <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-[#2a3142] bg-[#1a1f2e]/50 p-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#2a3142] bg-[#0c0f14]/80 text-[#3a4154]">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <line x1="9" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                <line x1="9" y1="17" x2="13" y2="17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-[family-name:var(--font-display)] text-base font-semibold text-[#e8eaf0]">
+                Select a grant to view details
+              </p>
+              <p className="mt-1 max-w-xs text-sm text-[#8b92a8]">
+                Click any grant on the left, or create a new one to see its vesting schedule and breakdown.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onShowGrantForm}
+              className="rounded-lg bg-[#3ee8b5]/10 px-5 py-2 text-sm font-semibold text-[#3ee8b5] transition hover:bg-[#3ee8b5]/20"
+            >
+              New grant →
+            </button>
           </div>
         )}
       </div>
